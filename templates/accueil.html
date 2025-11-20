@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🏨 Gestion Hôtelière</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        .header {
+            background: white;
+            padding: 25px;
+            border-radius: 15px;
+            margin-bottom: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            text-align: center;
+        }
+        .content {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        .section {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            height: 600px;
+            display: flex;
+            flex-direction: column;
+        }
+        .section h2 {
+            color: #333;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #667eea;
+        }
+        .list-container {
+            flex: 1;
+            overflow-y: auto;
+            border: 1px solid #eee;
+            border-radius: 8px;
+            padding: 10px;
+        }
+        .chambre-item, .client-item, .reservation-item {
+            padding: 12px;
+            margin: 8px 0;
+            border: 2px solid transparent;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        .chambre-item:hover, .client-item:hover {
+            border-color: #667eea;
+            background: #f8f9ff;
+        }
+        .chambre-item.disponible {
+            border-left: 4px solid #28a745;
+        }
+        .chambre-item.occupee {
+            border-left: 4px solid #dc3545;
+        }
+        .reservation-item {
+            background: #f8f9fa;
+            border-left: 4px solid #ffc107;
+        }
+        .selected {
+            background: #667eea !important;
+            color: white;
+        }
+        .reservation-form {
+            background: #e8f4fd;
+            padding: 20px;
+            border-radius: 10px;
+            margin-top: 20px;
+        }
+        .btn {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 12px 25px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-top: 10px;
+        }
+        .btn-danger {
+            background: #dc3545;
+        }
+        .btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        .btn-annuler {
+            background: #dc3545;
+            color: white;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 12px;
+            margin-top: 5px;
+        }
+        .success {
+            background: #d4edda;
+            color: #155724;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+        .selection-info {
+            background: #fff3cd;
+            color: #856404;
+            padding: 10px;
+            border-radius: 5px;
+            margin: 10px 0;
+        }
+        .stat {
+            display: inline-block;
+            background: #667eea;
+            color: white;
+            padding: 3px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            margin-left: 5px;
+        }
+        .service-indisponible {
+            text-align: center;
+            padding: 50px 20px;
+            color: #666;
+        }
+        .service-indisponible .icon {
+            font-size: 48px;
+            margin-bottom: 20px;
+        }
+        .refresh-btn {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- En-tête -->
+        <div class="header">
+            <h1>🏨 Système de gestion de réservation</h1>
+        </div>
+
+        <!-- Messages -->
+        {% if request.args.get('success') %}
+            {% if request.args.get('success') == '1' %}
+            <div class="success">✅ Réservation effectuée avec succès !</div>
+            {% elif request.args.get('success') == '2' %}
+            <div class="success">✅ Réservation annulée avec succès !</div>
+            {% endif %}
+        {% endif %}
+
+        <!-- Contenu principal - 3 COLONNES -->
+        <div class="content">
+            
+            <!-- COLONNE 1 : CLIENTS -->
+            <div class="section">
+                <h2>Clients 
+                    {% if services_status.clients %}
+                        <span class="stat">{{ clients|length }}</span>
+                    {% else %}
+                        <span style="color: #dc3545;">⏳ EN ATTENTE</span>
+                    {% endif %}
+                </h2>
+                
+                <div class="list-container">
+                    {% if services_status.clients %}
+                        {% for client in clients %}
+                        <div class="client-item" onclick="selectClient({{ client.id_client }}, '{{ client.prenom }} {{ client.nom }}')" 
+                            id="client-{{ client.id_client }}">
+                            <strong>{{ client.prenom }} {{ client.nom }}</strong><br>
+                            {{ client.email }}<br>
+                            {{ client.telephone }}
+                        </div>
+                        {% endfor %}
+                    {% else %}
+                        <div class="service-indisponible">
+                            <div class="icon">⏳</div>
+                            <h3>Service Clients Indisponible</h3>
+                            <p>Le service de gestion des clients est temporairement hors ligne.</p>
+                            <button class="refresh-btn" onclick="location.reload()">🔄 Actualiser</button>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- COLONNE 2 : CHAMBRES -->
+            <div class="section">
+                <h2>Chambres 
+                    {% if services_status.chambres %}
+                        <span class="stat">{{ chambres|length }}</span>
+                    {% else %}
+                        <span style="color: #dc3545;">⏳ EN ATTENTE</span>
+                    {% endif %}
+                </h2>
+                
+                <div class="list-container">
+                    {% if services_status.chambres %}
+                        {% for chambre in chambres %}
+                        <div class="chambre-item {{ 'disponible' if chambre.disponible else 'occupee' }}"
+                             onclick="selectChambre({{ chambre.id_chambre }}, {{ chambre.disponible|lower }})"
+                             id="chambre-{{ chambre.id_chambre }}">
+                            <strong>Chambre {{ chambre.id_chambre }}</strong><br>
+                            Type: {{ chambre.type_chambre }}<br>
+                            Prix: {{ chambre.prix }} FCFA/nuit<br>
+                            Étage: {{ chambre.etage }}<br>
+                            <strong>{{ '✅ Disponible' if chambre.disponible else '❌ Occupée' }}</strong>
+                        </div>
+                        {% endfor %}
+                    {% else %}
+                        <div class="service-indisponible">
+                            <div class="icon">⏳</div>
+                            <h3>Service Chambres Indisponible</h3>
+                            <p>Le service de gestion des chambres est temporairement hors ligne.</p>
+                            <button class="refresh-btn" onclick="location.reload()">🔄 Actualiser</button>
+                        </div>
+                    {% endif %}
+                </div>
+
+                <!-- Formulaire de réservation -->
+                <div class="reservation-form">
+                    <h3>Nouvelle Réservation</h3>
+                    <div id="selection-info" class="selection-info">
+                        {% if services_status.chambres and services_status.clients %}
+                            Sélectionnez un client et une chambre disponible
+                        {% else %}
+                            ⚠️ Services requis indisponibles
+                        {% endif %}
+                    </div>
+                    <form id="reservationForm" action="/reserver" method="POST">
+                        <input type="hidden" name="client_id" id="clientId">
+                        <input type="hidden" name="chambre_id" id="chambreId">
+                        
+                        <div>
+                            <label><strong>Nuits:</strong></label>
+                            <input type="number" name="nuits" min="1" max="30" value="1" required 
+                                   style="padding: 8px; border: 1px solid #ddd; border-radius: 4px; width: 80px;"
+                                   {% if not services_status.chambres or not services_status.clients %}disabled{% endif %}>
+                        </div>
+                        
+                        <button type="submit" class="btn" id="reserverBtn" 
+                                {% if not services_status.chambres or not services_status.clients or not services_status.reservations %}disabled{% endif %}>
+                            Réserver
+                        </button>
+                        
+                        {% if not services_status.reservations %}
+                        <div style="color: #dc3545; font-size: 12px; margin-top: 5px;">
+                            ❌ Service réservations indisponible
+                        </div>
+                        {% endif %}
+                    </form>
+                </div>
+            </div>
+
+            <!-- COLONNE 3 : RÉSERVATIONS -->
+            <div class="section">
+                <h2>Réservations 
+                    {% if services_status.reservations %}
+                        <span class="stat">{{ reservations|length }}</span>
+                    {% else %}
+                        <span style="color: #dc3545;">⏳ EN ATTENTE</span>
+                    {% endif %}
+                </h2>
+                
+                <div class="list-container">
+                    {% if services_status.reservations %}
+                        {% if reservations %}
+                            {% for resa in reservations %}
+                            <div class="reservation-item">
+                                <strong>{{ resa.numero_reservation }}</strong><br>
+                                {{ resa.client_info.prenom }} {{ resa.client_info.nom }}<br>
+                                Chambre {{ resa.chambre_id }} ({{ resa.chambre_info.type_chambre }})<br>
+                                {{ resa.nuits }} nuit(s) - {{ resa.prix_total }} FCFA<br>
+                                {{ resa.date_reservation[:10] }}<br>
+                                <form action="/annuler/{{ resa._id }}" method="POST" style="display: inline;">
+                                    <button type="submit" class="btn-annuler" onclick="return confirm('Annuler cette réservation?')">
+                                        ❌ Annuler
+                                    </button>
+                                </form>
+                            </div>
+                            {% endfor %}
+                        {% else %}
+                            <p style="text-align: center; color: #666; margin-top: 50px;">
+                                Aucune réservation pour le moment
+                            </p>
+                        {% endif %}
+                    {% else %}
+                        <div class="service-indisponible">
+                            <div class="icon">⏳</div>
+                            <h3>Service Réservations Indisponible</h3>
+                            <p>Le service de gestion des réservations est temporairement hors ligne.</p>
+                            <button class="refresh-btn" onclick="location.reload()">🔄 Actualiser</button>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let selectedClient = null;
+        let selectedClientName = null;
+        let selectedChambre = null;
+        let chambreDisponible = false;
+
+        function selectClient(clientId, clientName) {
+            // Vérifier si le service est disponible
+            if (!{{ services_status.clients|lower }}) return;
+            
+            // Désélectionner ancien client
+            if (selectedClient) {
+                document.getElementById(`client-${selectedClient}`).classList.remove('selected');
+            }
+            
+            // Sélectionner nouveau client
+            selectedClient = clientId;
+            selectedClientName = clientName;
+            document.getElementById(`client-${clientId}`).classList.add('selected');
+            document.getElementById('clientId').value = clientId;
+            
+            updateReservationButton();
+            updateSelectionInfo();
+        }
+
+        function selectChambre(chambreId, disponible) {
+            // Vérifier si le service est disponible
+            if (!{{ services_status.chambres|lower }}) return;
+            
+            // Désélectionner ancienne chambre
+            if (selectedChambre) {
+                document.getElementById(`chambre-${selectedChambre}`).classList.remove('selected');
+            }
+            
+            // Sélectionner nouvelle chambre
+            selectedChambre = chambreId;
+            chambreDisponible = disponible;
+            document.getElementById(`chambre-${chambreId}`).classList.add('selected');
+            document.getElementById('chambreId').value = chambreId;
+            
+            updateReservationButton();
+            updateSelectionInfo();
+        }
+
+        function updateReservationButton() {
+            const btn = document.getElementById('reserverBtn');
+            const servicesOk = {{ services_status.chambres|lower }} && {{ services_status.clients|lower }} && {{ services_status.reservations|lower }};
+            
+            if (servicesOk && selectedClient && selectedChambre && chambreDisponible) {
+                btn.disabled = false;
+            } else {
+                btn.disabled = true;
+            }
+        }
+
+        function updateSelectionInfo() {
+            const infoDiv = document.getElementById('selection-info');
+            const servicesOk = {{ services_status.chambres|lower }} && {{ services_status.clients|lower }};
+            
+            if (!servicesOk) {
+                infoDiv.innerHTML = '⚠️ Services requis indisponibles';
+                return;
+            }
+
+            if (selectedClient && selectedChambre) {
+                if (chambreDisponible) {
+                    infoDiv.innerHTML = `
+                        <strong>✅ Prêt à réserver !</strong><br>
+                        Client: ${selectedClientName}<br>
+                        Chambre: ${selectedChambre}
+                    `;
+                } else {
+                    infoDiv.innerHTML = `
+                        <strong>❌ Chambre occupée</strong><br>
+                        Sélectionnez une chambre disponible
+                    `;
+                }
+            } else if (selectedClient) {
+                infoDiv.innerHTML = `Client: ${selectedClientName}<br>Sélectionnez une chambre disponible`;
+            } else if (selectedChambre) {
+                infoDiv.innerHTML = `Chambre: ${selectedChambre}<br>Sélectionnez un client`;
+            } else {
+                infoDiv.innerHTML = 'Sélectionnez un client et une chambre disponible';
+            }
+        }
+
+        // Initialisation
+        document.addEventListener('DOMContentLoaded', function() {
+            updateReservationButton();
+            updateSelectionInfo();
+        });
+    </script>
+</body>
+</html>
