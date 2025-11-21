@@ -4,6 +4,7 @@ from pymongo import MongoClient
 from datetime import datetime
 import random
 from bson.objectid import ObjectId
+import concurrent.futures
 
 app = Flask(__name__)
 
@@ -24,52 +25,59 @@ def mettre_a_jour_disponibilite_chambre(chambre_id, disponible):
         print(f"❌ Erreur mise à jour chambre {chambre_id}: {e}")
         return False
 
+def verifier_chambre(chambre_id):
+    """Vérifie si la chambre existe et est disponible"""
+    try:
+        response = requests.get(f'http://localhost:5001/chambre/{chambre_id}')
+        if response.status_code == 200:
+            return response.json()
+        return None
+    except Exception as e:
+        print(f"❌ Erreur vérification chambre {chambre_id}: {e}")
+        return None
+
+def verifier_client(client_id):
+    """Vérifie si le client existe"""
+    try:
+        response = requests.get(f'http://localhost:5002/client/{client_id}')
+        if response.status_code == 200:
+            return response.json()
+        return None
+    except Exception as e:
+        print(f"❌ Erreur vérification client {client_id}: {e}")
+        return None
+
 @app.route('/reserver', methods=['POST'])
 def reserver():
-    """Faire une nouvelle réservation"""
     try:
         data = request.json
         client_id = data.get('client_id')
         chambre_id = data.get('chambre_id')
         nuits = data.get('nuits', 1)
         
-        print(f"📝 Tentative réservation: Client {client_id}, Chambre {chambre_id}, {nuits} nuits")
+        print(f"🚀 Début réservation parallèle...")
         
-        # 1. Vérifier la chambre
-        response_chambre = requests.get(f'http://localhost:5001/chambre/{chambre_id}')
-        if response_chambre.status_code != 200:
-            return jsonify({"error": "Chambre non trouvée"}), 400
-        chambre = response_chambre.json()
+        # ✅ VÉRIFICATIONS EN PARALLÈLE (au lieu de séquentiel)
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            # Lance les 2 vérifications EN MÊME TEMPS
+            future_chambre = executor.submit(verifier_chambre, chambre_id)
+            future_client = executor.submit(verifier_client, client_id)
+            
+            # Récupère les résultats
+            chambre = future_chambre.result(timeout=3)
+            client = future_client.result(timeout=3)
         
-        if not chambre['disponible']:
-            return jsonify({"error": "Chambre déjà occupée"}), 400
+        # ✅ Continuer avec le reste...
+        prix_total = chambre['prix'] * nuits
         
-        # 2. Vérifier le client
-        response_client = requests.get(f'http://localhost:5002/client/{client_id}')
-        if response_client.status_code != 200:
-            return jsonify({"error": "Client non trouvé"}), 400
-        client = response_client.json()
-        
-        # 3. Calculer le prix (avec service prix si disponible)
-        try:
-            response_prix = requests.post('http://localhost:5004/calculer', json={
-                "prix_nuit": chambre['prix'],
-                "nuits": nuits
-            })
-            calcul = response_prix.json()
-            prix_total = calcul['total_final']
-            remise = calcul.get('remise', '0%')
-        except:
-            # Fallback si service prix indisponible
-            prix_total = chambre['prix'] * nuits
-            remise = '0%'
-        
-        # 4. METTRE À JOUR LA DISPONIBILITÉ (False = occupée)
+        # ✅ Blocage chambre
         if not mettre_a_jour_disponibilite_chambre(chambre_id, False):
             return jsonify({"error": "Impossible de bloquer la chambre"}), 500
         
-        # 5. Créer la réservation dans MongoDB
+        # ✅ Création réservation
         reservation = {
+            "client_id": client_id,
+            "chambre_id": chambre_id,
             "client_info": client,
             "chambre_info": chambre,
             "nuits": nuits,
@@ -80,20 +88,13 @@ def reserver():
         }
         
         result = reservations_collection.insert_one(reservation)
-        reservation_id = str(result.inserted_id)
         
-        print(f"✅ Réservation créée: {reservation['numero_reservation']}")
+        print(f"✅ Réservation {reservation['numero_reservation']} créée en parallèle!")
         
-        return jsonify({
-            "success": True,
-            "id_reservation": reservation_id,
-            "numero_reservation": reservation['numero_reservation'],
-            "message": "Réservation confirmée !",
-            "prix_total": prix_total,
-            "remise": remise,
-            "reservation": reservation
-        })
+        return jsonify({"success": True, "reservation": reservation})
         
+    except concurrent.futures.TimeoutError:
+        return jsonify({"error": "Timeout lors des vérifications"}), 500
     except Exception as e:
         return jsonify({"error": f"Erreur: {str(e)}"}), 500
 

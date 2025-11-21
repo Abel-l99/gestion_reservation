@@ -10,6 +10,10 @@ db_config = {
     'database': 'service_clients'
 }
 
+@app.route('/')
+def racine():
+    return jsonified({"status": "OK", "service": "Clients"})
+
 @app.route('/clients', methods=['GET'])
 def get_clients():
     conn = mysql.connector.connect(**db_config)

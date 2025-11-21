@@ -11,6 +11,10 @@ db_config = {
     'database': 'service_chambres'
 }
 
+@app.route('/')
+def racine():
+    return jsonify({"status": "OK", "service": "Chambres"})
+
 @app.route('/chambres', methods=['GET'])
 def get_chambres():
     conn = mysql.connector.connect(**db_config)
@@ -37,6 +41,16 @@ def get_chambre(id):
     chambre = cursor.fetchone()
     conn.close()
     return jsonify(chambre) if chambre else ({"error": "Chambre non trouvée"}, 404)
+
+@app.route('/agences', methods=['GET'])
+def get_agences():
+    """Récupère toutes les agences"""
+    conn = mysql.connector.connect(**db_config)
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute("SELECT * FROM agence")
+    agences = cursor.fetchall()
+    conn.close()
+    return jsonify(agences)
 
 # ⭐⭐ AJOUTE CETTE NOUVELLE ROUTE ⭐⭐
 @app.route('/chambre/<int:id>/disponible', methods=['PUT'])

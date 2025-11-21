@@ -168,7 +168,7 @@
     <div class="container">
         <!-- En-tête -->
         <div class="header">
-            <h1>🏨 Système de gestion de réservation</h1>
+            <h1>Système de gestion de réservation</h1>
         </div>
 
         <!-- Messages -->
@@ -189,7 +189,7 @@
                     {% if services_status.clients %}
                         <span class="stat">{{ clients|length }}</span>
                     {% else %}
-                        <span style="color: #dc3545;">⏳ EN ATTENTE</span>
+                        <span>- EN ATTENTE</span>
                     {% endif %}
                 </h2>
                 
@@ -205,7 +205,6 @@
                         {% endfor %}
                     {% else %}
                         <div class="service-indisponible">
-                            <div class="icon">⏳</div>
                             <h3>Service Clients Indisponible</h3>
                             <p>Le service de gestion des clients est temporairement hors ligne.</p>
                             <button class="refresh-btn" onclick="location.reload()">🔄 Actualiser</button>
@@ -220,7 +219,7 @@
                     {% if services_status.chambres %}
                         <span class="stat">{{ chambres|length }}</span>
                     {% else %}
-                        <span style="color: #dc3545;">⏳ EN ATTENTE</span>
+                        <span>- EN ATTENTE</span>
                     {% endif %}
                 </h2>
                 
@@ -231,18 +230,18 @@
                              onclick="selectChambre({{ chambre.id_chambre }}, {{ chambre.disponible|lower }})"
                              id="chambre-{{ chambre.id_chambre }}">
                             <strong>Chambre {{ chambre.id_chambre }}</strong><br>
+                            Agence: {{ agences_map.get(chambre.id_agence, 'Inconnue') }}<br>
                             Type: {{ chambre.type_chambre }}<br>
                             Prix: {{ chambre.prix }} FCFA/nuit<br>
                             Étage: {{ chambre.etage }}<br>
-                            <strong>{{ '✅ Disponible' if chambre.disponible else '❌ Occupée' }}</strong>
+                            <strong>{{ 'Disponible' if chambre.disponible else 'Occupée' }}</strong>
                         </div>
                         {% endfor %}
                     {% else %}
                         <div class="service-indisponible">
-                            <div class="icon">⏳</div>
                             <h3>Service Chambres Indisponible</h3>
                             <p>Le service de gestion des chambres est temporairement hors ligne.</p>
-                            <button class="refresh-btn" onclick="location.reload()">🔄 Actualiser</button>
+                            <button class="refresh-btn" onclick="location.reload()">Actualiser</button>
                         </div>
                     {% endif %}
                 </div>
@@ -254,7 +253,7 @@
                         {% if services_status.chambres and services_status.clients %}
                             Sélectionnez un client et une chambre disponible
                         {% else %}
-                            ⚠️ Services requis indisponibles
+                            Services requis indisponibles
                         {% endif %}
                     </div>
                     <form id="reservationForm" action="/reserver" method="POST">
@@ -275,7 +274,7 @@
                         
                         {% if not services_status.reservations %}
                         <div style="color: #dc3545; font-size: 12px; margin-top: 5px;">
-                            ❌ Service réservations indisponible
+                            Service réservations indisponible
                         </div>
                         {% endif %}
                     </form>
@@ -288,7 +287,7 @@
                     {% if services_status.reservations %}
                         <span class="stat">{{ reservations|length }}</span>
                     {% else %}
-                        <span style="color: #dc3545;">⏳ EN ATTENTE</span>
+                        <span>- EN ATTENTE</span>
                     {% endif %}
                 </h2>
                 
@@ -303,7 +302,7 @@
                                 {{ resa.nuits }} nuit(s) - {{ resa.prix_total }} FCFA<br>
                                 {{ resa.date_reservation[:10] }}<br>
                                 <form action="/annuler/{{ resa._id }}" method="POST" style="display: inline;">
-                                    <button type="submit" class="btn-annuler" onclick="return confirm('Annuler cette réservation?')">
+                                    <button type="button" class="btn-annuler" onclick="annulerReservation('{{ resa._id }}')">
                                         ❌ Annuler
                                     </button>
                                 </form>
@@ -316,7 +315,6 @@
                         {% endif %}
                     {% else %}
                         <div class="service-indisponible">
-                            <div class="icon">⏳</div>
                             <h3>Service Réservations Indisponible</h3>
                             <p>Le service de gestion des réservations est temporairement hors ligne.</p>
                             <button class="refresh-btn" onclick="location.reload()">🔄 Actualiser</button>
@@ -410,6 +408,33 @@
                 infoDiv.innerHTML = `Chambre: ${selectedChambre}<br>Sélectionnez un client`;
             } else {
                 infoDiv.innerHTML = 'Sélectionnez un client et une chambre disponible';
+            }
+        }
+
+        function annulerReservation(reservationId) {
+            if (confirm('Êtes-vous sûr de vouloir annuler cette réservation?')) {
+                // ⭐⭐ CORRECTION : Utilise POST au lieu de DELETE pour correspondre à ta route Flask
+                fetch(`/annuler/${reservationId}`, {
+                    method: 'POST',  // ← CHANGE DE DELETE À POST
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                })
+                .then(response => {
+                    if (response.ok) {
+                        // ✅ Succès - recharger la page pour voir les changements
+                        window.location.href = '/?success=2';  // ← Redirection avec message de succès
+                    } else {
+                        // ❌ Erreur - afficher le message d'erreur
+                        response.text().then(errorMsg => {
+                            alert('Erreur: ' + errorMsg);
+                        });
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('Erreur réseau lors de l\'annulation');
+                });
             }
         }
 
