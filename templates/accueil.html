@@ -171,15 +171,6 @@
             <h1>Système de gestion de réservation</h1>
         </div>
 
-        <!-- Messages -->
-        {% if request.args.get('success') %}
-            {% if request.args.get('success') == '1' %}
-            <div class="success">✅ Réservation effectuée avec succès !</div>
-            {% elif request.args.get('success') == '2' %}
-            <div class="success">✅ Réservation annulée avec succès !</div>
-            {% endif %}
-        {% endif %}
-
         <!-- Contenu principal - 3 COLONNES -->
         <div class="content">
             
@@ -207,7 +198,7 @@
                         <div class="service-indisponible">
                             <h3>Service Clients Indisponible</h3>
                             <p>Le service de gestion des clients est temporairement hors ligne.</p>
-                            <button class="refresh-btn" onclick="location.reload()">🔄 Actualiser</button>
+                            <button class="refresh-btn" onclick="location.reload()">Actualiser</button>
                         </div>
                     {% endif %}
                 </div>
@@ -283,7 +274,7 @@
 
             <!-- COLONNE 3 : RÉSERVATIONS -->
             <div class="section">
-                <h2>Réservations 
+                <h2>Réservations en cours 
                     {% if services_status.reservations %}
                         <span class="stat">{{ reservations|length }}</span>
                     {% else %}
@@ -297,13 +288,22 @@
                             {% for resa in reservations %}
                             <div class="reservation-item">
                                 <strong>{{ resa.numero_reservation }}</strong><br>
+                                {% if resa.client_info %}
                                 {{ resa.client_info.prenom }} {{ resa.client_info.nom }}<br>
+                                {% else %}
+                                Client #{{ resa.client_id }}<br>
+                                {% endif %}
+                                {% if resa.chambre_info %}
                                 Chambre {{ resa.chambre_id }} ({{ resa.chambre_info.type_chambre }})<br>
+                                {% else %}
+                                Chambre {{ resa.chambre_id }}<br>
+                                {% endif %}
                                 {{ resa.nuits }} nuit(s) - {{ resa.prix_total }} FCFA<br>
                                 {{ resa.date_reservation[:10] }}<br>
+                                Statut: {{ resa.statut }}<br>
                                 <form action="/annuler/{{ resa._id }}" method="POST" style="display: inline;">
-                                    <button type="button" class="btn-annuler" onclick="annulerReservation('{{ resa._id }}')">
-                                        ❌ Annuler
+                                    <button type="button" class="btn-annuler" onclick="annulerReservation('{{ resa._id }}')" {% if resa.statut == 'annulée' %}disabled{% endif %}>
+                                        Annuler
                                     </button>
                                 </form>
                             </div>

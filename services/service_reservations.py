@@ -1,10 +1,8 @@
 from flask import Flask, jsonify, request
-import requests
 from pymongo import MongoClient
 from datetime import datetime
 import random
 from bson.objectid import ObjectId
-import concurrent.futures
 
 app = Flask(__name__)
 
@@ -12,40 +10,6 @@ app = Flask(__name__)
 client = MongoClient('mongodb://localhost:27017/')
 db = client['hotel_reservations']
 reservations_collection = db['reservations']
-
-def mettre_a_jour_disponibilite_chambre(chambre_id, disponible):
-    """Met à jour la disponibilité d'une chambre dans MySQL"""
-    try:
-        response = requests.put(
-            f'http://localhost:5001/chambre/{chambre_id}/disponible',
-            json={"disponible": disponible}
-        )
-        return response.status_code == 200
-    except Exception as e:
-        print(f"❌ Erreur mise à jour chambre {chambre_id}: {e}")
-        return False
-
-def verifier_chambre(chambre_id):
-    """Vérifie si la chambre existe et est disponible"""
-    try:
-        response = requests.get(f'http://localhost:5001/chambre/{chambre_id}')
-        if response.status_code == 200:
-            return response.json()
-        return None
-    except Exception as e:
-        print(f"❌ Erreur vérification chambre {chambre_id}: {e}")
-        return None
-
-def verifier_client(client_id):
-    """Vérifie si le client existe"""
-    try:
-        response = requests.get(f'http://localhost:5002/client/{client_id}')
-        if response.status_code == 200:
-            return response.json()
-        return None
-    except Exception as e:
-        print(f"❌ Erreur vérification client {client_id}: {e}")
-        return None
 
 @app.route('/reserver', methods=['POST'])
 def reserver():
@@ -55,31 +19,19 @@ def reserver():
         chambre_id = data.get('chambre_id')
         nuits = data.get('nuits', 1)
         
-        print(f"🚀 Début réservation parallèle...")
+        # ✅ Vérifications basiques
+        if not client_id or not chambre_id:
+            return jsonify({"success": False, "error": "client_id et chambre_id requis"}), 400
         
-        # ✅ VÉRIFICATIONS EN PARALLÈLE (au lieu de séquentiel)
-        with concurrent.futures.ThreadPoolExecutor() as executor:
-            # Lance les 2 vérifications EN MÊME TEMPS
-            future_chambre = executor.submit(verifier_chambre, chambre_id)
-            future_client = executor.submit(verifier_client, client_id)
-            
-            # Récupère les résultats
-            chambre = future_chambre.result(timeout=3)
-            client = future_client.result(timeout=3)
-        
-        # ✅ Continuer avec le reste...
-        prix_total = chambre['prix'] * nuits
-        
-        # ✅ Blocage chambre
-        if not mettre_a_jour_disponibilite_chambre(chambre_id, False):
-            return jsonify({"error": "Impossible de bloquer la chambre"}), 500
+        # ✅ Calcul prix: accepter prix_total fourni par app_web, sinon défaut
+        prix_total = data.get('prix_total')
+        if prix_total is None:
+            prix_total = 100 * nuits
         
         # ✅ Création réservation
         reservation = {
             "client_id": client_id,
             "chambre_id": chambre_id,
-            "client_info": client,
-            "chambre_info": chambre,
             "nuits": nuits,
             "prix_total": prix_total,
             "date_reservation": datetime.now().isoformat(),
@@ -89,14 +41,15 @@ def reserver():
         
         result = reservations_collection.insert_one(reservation)
         
-        print(f"✅ Réservation {reservation['numero_reservation']} créée en parallèle!")
+        return jsonify({
+            "success": True, 
+            "message": "Réservation créée avec succès",
+            "reservation_id": str(result.inserted_id),
+            "numero_reservation": reservation['numero_reservation']
+        })
         
-        return jsonify({"success": True, "reservation": reservation})
-        
-    except concurrent.futures.TimeoutError:
-        return jsonify({"error": "Timeout lors des vérifications"}), 500
     except Exception as e:
-        return jsonify({"error": f"Erreur: {str(e)}"}), 500
+        return jsonify({"success": False, "error": f"Erreur: {str(e)}"}), 500
 
 @app.route('/reservations', methods=['GET'])
 def get_reservations():
@@ -109,7 +62,7 @@ def get_reservations():
     except Exception as e:
         return jsonify({"error": f"Erreur: {str(e)}"}), 500
 
-@app.route('/reservations/client/<int:client_id>', methods=['GET'])
+@app.route('/reservations/client/<client_id>', methods=['GET'])
 def get_reservations_client(client_id):
     """Voir les réservations d'un client"""
     try:
@@ -120,39 +73,76 @@ def get_reservations_client(client_id):
     except Exception as e:
         return jsonify({"error": f"Erreur: {str(e)}"}), 500
 
-@app.route('/annuler/<reservation_id>', methods=['DELETE'])
-def annuler_reservation(reservation_id):
-    """Annuler une réservation et libérer la chambre"""
+def changer_statut_reservation(reservation_id, nouveau_statut="annulée"):
+    """Service interne qui change seulement le statut d'une réservation"""
     try:
-        # Récupérer la réservation
+        print(f"🔄 Changement statut {reservation_id} → {nouveau_statut}")
+        
         reservation = reservations_collection.find_one({"_id": ObjectId(reservation_id)})
         
         if not reservation:
-            return jsonify({"error": "Réservation non trouvée"}), 404
+            return {"success": False, "error": "Réservation non trouvée"}
         
-        # Libérer la chambre (mettre disponible = True)
-        if not mettre_a_jour_disponibilite_chambre(reservation['chambre_id'], True):
-            return jsonify({"error": "Impossible de libérer la chambre"}), 500
+        # Vérifier si déjà annulée
+        if reservation.get('statut') == 'annulée':
+            return {"success": False, "error": "Réservation déjà annulée"}
         
-        # Supprimer la réservation
-        result = reservations_collection.delete_one({"_id": ObjectId(reservation_id)})
+        # Modification du statut
+        result = reservations_collection.update_one(
+            {"_id": ObjectId(reservation_id)},
+            {"$set": {
+                "statut": nouveau_statut,
+                "date_annulation": datetime.now().isoformat() if nouveau_statut == "annulée" else None
+            }}
+        )
         
-        if result.deleted_count == 1:
-            return jsonify({
+        if result.modified_count == 1:
+            success_message = f"✅ Statut changé: {reservation_id} → {nouveau_statut}"
+            print(success_message)
+            return {
                 "success": True, 
-                "message": f"Réservation annulée - Chambre {reservation['chambre_id']} libérée"
-            })
+                "message": success_message,
+                "chambre_id": reservation.get('chambre_id'),
+                "numero_reservation": reservation.get('numero_reservation')
+            }
         else:
-            return jsonify({"error": "Réservation non trouvée"}), 404
+            return {"success": False, "error": "Échec du changement de statut"}
             
     except Exception as e:
-        return jsonify({"error": f"Erreur: {str(e)}"}), 500
+        error_message = f"Erreur: {str(e)}"
+        print(error_message)
+        return {"success": False, "error": error_message}
 
 @app.route('/health', methods=['GET'])
 def health():
     return jsonify({"status": "OK", "service": "Réservations", "database": "MongoDB"})
 
+@app.route('/reservations/<reservation_id>/statut', methods=['PUT'])
+def update_statut_reservation(reservation_id):
+    try:
+        data = request.json or {}
+        nouveau_statut = data.get('statut', 'annulée')
+        reservation = reservations_collection.find_one({"_id": ObjectId(reservation_id)})
+        if not reservation:
+            return jsonify({"success": False, "error": "Réservation non trouvée"}), 404
+        result = reservations_collection.update_one(
+            {"_id": ObjectId(reservation_id)},
+            {"$set": {
+                "statut": nouveau_statut,
+                "date_annulation": datetime.now().isoformat() if nouveau_statut == "annulée" else None
+            }}
+        )
+        if result.modified_count == 1:
+            return jsonify({
+                "success": True,
+                "chambre_id": reservation.get('chambre_id'),
+                "numero_reservation": reservation.get('numero_reservation')
+            })
+        else:
+            return jsonify({"success": False, "error": "Échec du changement de statut"}), 500
+    except Exception as e:
+        return jsonify({"success": False, "error": f"Erreur: {str(e)}"}), 500
+
 if __name__ == '__main__':
-    print("📅 Service Réservations (MongoDB) → http://localhost:5003")
-    print("🗄️  Base: hotel_reservations, Collection: reservations")
+    print("Service Réservations -> http://localhost:5003")
     app.run(port=5003, debug=True)

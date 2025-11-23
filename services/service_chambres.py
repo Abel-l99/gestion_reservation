@@ -52,7 +52,7 @@ def get_agences():
     conn.close()
     return jsonify(agences)
 
-# ⭐⭐ AJOUTE CETTE NOUVELLE ROUTE ⭐⭐
+# AJOUTE CETTE NOUVELLE ROUTE 
 @app.route('/chambre/<int:id>/disponible', methods=['PUT'])
 def update_disponibilite(id):
     """Met à jour la disponibilité d'une chambre"""
@@ -74,6 +74,26 @@ def update_disponibilite(id):
     except Exception as e:
         return jsonify({"error": f"Erreur MySQL: {str(e)}"}), 500
 
+def liberer_chambre(chambre_id):
+    """Service qui libère seulement une chambre"""
+    try:
+        conn = mysql.connector.connect(**db_config)
+        cursor = conn.cursor()
+        cursor.execute("UPDATE chambre SET disponible = TRUE WHERE id_chambre = %s", (chambre_id,))
+        conn.commit()
+        
+        if cursor.rowcount == 1:
+            return {"success": True, "message": "Chambre libérée"}
+        else:
+            return {"success": False, "error": "Chambre non trouvée"}
+            
+    except Exception as e:
+        return {"success": False, "error": f"Erreur MySQL: {str(e)}"}
+    finally:
+        if 'conn' in locals() and conn.is_connected():
+            conn.close()
+
+
 if __name__ == '__main__':
-    print("🏨 Service Chambres → http://localhost:5001")
+    print("Service Chambres -> http://localhost:5001")
     app.run(port=5001, debug=True)
