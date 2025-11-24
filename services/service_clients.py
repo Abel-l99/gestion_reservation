@@ -33,5 +33,5 @@ def get_client(id):
     return jsonify(client) if client else ({"error": "Client non trouvé"}, 404)
 
 if __name__ == '__main__':
-    print("👥 Service Clients -> http://localhost:5002")
+    print(" Service Clients -> http://localhost:5002")
     app.run(port=5002, debug=True)

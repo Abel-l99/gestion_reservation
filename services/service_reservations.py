@@ -32,11 +32,13 @@ def reserver():
         reservation = {
             "client_id": client_id,
             "chambre_id": chambre_id,
+            "client_info": data.get('client_info'),
+            "chambre_info": data.get('chambre_info'),
             "nuits": nuits,
             "prix_total": prix_total,
             "date_reservation": datetime.now().isoformat(),
             "statut": "en cours",
-            "numero_reservation": f"RES{random.randint(1000, 9999)}"
+            "numero_reservation": f"RES{random.randint(1000, 9999)}",
         }
         
         result = reservations_collection.insert_one(reservation)

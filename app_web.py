@@ -206,7 +206,16 @@ def annuler_reservation_complete(reservation_id):
         # 2. RÉCUPÉRATION ID CHAMBRE 
         chambre_id = result_reservation.get('chambre_id')
         if not chambre_id:
-            return jsonify({"success": False, "error": "ID chambre manquant"}), 500
+            try:
+                all_reservations = requests.get(f"{SERVICES['reservations']}/reservations", timeout=8).json() or []
+                for resa in all_reservations:
+                    if str(resa.get('_id')) == str(reservation_id):
+                        chambre_id = resa.get('chambre_id')
+                        break
+            except Exception:
+                pass
+            if not chambre_id:
+                return jsonify({"success": False, "error": "ID chambre manquant"}), 500
         
         # 3. APPEL SERVICE CHAMBRES - Libération chambre 
         ok = mettre_a_jour_disponibilite_chambre(int(chambre_id), True)

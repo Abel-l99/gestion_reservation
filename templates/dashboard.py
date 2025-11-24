@@ -65,9 +65,9 @@ PAGE_WEB = '''
         
         <div class="communication">
             <h2>COMMUNICATION VIA APP_WEB (PONT)</h2>
-            <p>2. <strong>app_web</strong> -> <strong>Service Chambres</strong> : récupère les informations sur la chambre </p>
-            <p>3. <strong>app_web</strong> -> <strong>Service clients</strong> : récupère les informations sur le client </p>
-            <p>1. <strong>app_web</strong> -> <strong>Service Réservations</strong> : créer/annuler une réservation avec les informations récupérées</p>
+            <p>1. <strong>app_web</strong> -> <strong>Service Chambres</strong> : récupère les informations sur la chambre </p>
+            <p>2. <strong>app_web</strong> -> <strong>Service clients</strong> : récupère les informations sur le client </p>
+            <p>3. <strong>app_web</strong> -> <strong>Service Réservations</strong> : créer/annuler une réservation avec les informations récupérées</p>
             <p>4. <strong>Service réservations</strong> -> <strong>Base de données</strong> : Enregistre/modifie les données dans la base de données</p>
         </div>
         
